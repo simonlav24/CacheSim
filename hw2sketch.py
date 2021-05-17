@@ -2,6 +2,16 @@ import argparse
 from random import randint, choice
 from math import log2
 
+# todo:
+# valid:
+	# if need to address it when updating lru
+# dirty
+	# maybe something woth times in the future
+# continue from test 3 fix lru bug
+
+
+ADDRESS_SIZE = 32
+
 def parseArgs():
 	"""
 	./cacheSim <input file> --mem-cyc <# of cycles> --bsize <block log2(size)>
@@ -27,7 +37,10 @@ def parseArgs():
 	parser.add_argument('--l2-cyc', type=int)
 	
 	return parser.parse_args()
-	
+
+def binary(x):
+	return format(x, "032b")
+
 class CacheEntry:
 	def __init__(self):
 		self.tag = 0
@@ -47,35 +60,178 @@ class Cache:
 		self.below = None
 		self.above = None
 		
+		self.timeAccu = 0
+		self.missCounter = 0
+		self.accessCounter = 0
+		
+		self.offsetSize = args.bsize
+		self.setSize = self.size - self.offsetSize - self.assoc
+		self.tagSize = ADDRESS_SIZE - self.setSize - self.offsetSize
+		
 		self.ways = [None] * 2**self.assoc
 		for way in range(2**self.assoc):
 			self.ways[way] = []
-			for i in range(2**self.size):
+			for i in range(2**self.setSize):
 				self.ways[way].append(CacheEntry())
+				
+		self.lru = [None] * 2**self.setSize
+		for l in range(2**self.setSize):
+			self.lru[l] = [i for i in range(2**self.assoc)]
 		
 		self.name = name
+	
+	def updateLru(self, setnum, way):
+		# print(self.lru)
+		x = self.lru[setnum][way]
+		self.lru[setnum][way] = 2 ** self.assoc - 1
+		for j in range(2 ** self.assoc):
+			if(j != way and self.lru[setnum][j] > x):
+				self.lru[setnum][j] -= 1
+		
+	def getLruMin(self, setnum):
+		index = self.lru[setnum].index(0)
+		return index
+	
+	def search(self, address):
+		offset, setnum, tag = self.getFromAddress(address)
+		for way in range(2 ** self.assoc):
+			if self.ways[way][setnum].tag == tag and self.ways[way][setnum].valid == 1:
+				return (True, way)
+		return (False, -1)
+	
+	def getFromAddress(self, pc):
+		offsetSize = args.bsize
+		setSize = self.size - offsetSize - self.assoc
+		tagSize = ADDRESS_SIZE - setSize - offsetSize
+		
+		mask = 2**(offsetSize) - 1
+		offset = mask & address
+		
+		mask = (2**(setSize) - 1) * 2**offsetSize
+		setnum = (mask & address) >> offsetSize
+		
+		mask = (2**(tagSize) - 1) * 2**(offsetSize + setSize)
+		tag = (mask & address) >> (offsetSize + setSize)
+	
+		return (offset, setnum, tag)
+	
+	def write(self, address):
+		print("writing", self.name)
+		offset, setnum, tag = self.getFromAddress(address)
+		hit, way = self.search(address)
+		
+		self.accessCounter += 1
+		self.timeAccu += self.cycles
+		
+		if hit:
+			print(" - write hit")
+			self.updateLru(setnum, way)
+			
+		else:
+			print(" - write miss")
+			self.missCounter += 1
+			if self.below:
+				self.below.write(address)
+			else:
+				self.timeAccu += args.mem_cyc
+			
+			# add to self according to lru
+			if args.wr_alloc == 1: # write allocate (need to bring into cache)
+				x = self.getLruMin(setnum)
+				self.ways[x][setnum].tag = tag
+				self.ways[x][setnum].valid = 1
+				self.ways[x][setnum].dirty = 1
+				self.updateLru(setnum, x)
+			
+			
+	def read(self, address):
+		print("reading", self.name)
+		offset, setnum, tag = self.getFromAddress(address)
+		hit, way = self.search(address)
+		
+		self.accessCounter += 1
+		self.timeAccu += self.cycles
+		
+		if hit:
+			self.updateLru(setnum, way)
+			print(" - read hit")
+			
+		else:
+			print(" - read miss")
+			self.missCounter += 1
+			if self.below:
+				self.below.read(address)
+			else:
+				self.timeAccu += args.mem_cyc
+			
+			# add to self according to lru
+			x = self.getLruMin(setnum)
+			self.ways[x][setnum].tag = tag
+			self.ways[x][setnum].valid = 1
+			self.updateLru(setnum, x)
+			
+	
+	
 	def __str__(self):
 		string = '--- Cache: ' + self.name + ' size: ' + str(self.size) + " assoc: " + str(self.assoc) + " cycles: " + str(self.cycles) + " ---\n"
+		# for s in range(2**self.size):
+			# for w in range(2**self.assoc):
+				# string += str(self.ways[w][s]) + " "
+			# string += "\n"
+		return string
+	def printValid(self):
+		string = '--- Cache: ' + self.name + ' size: ' + str(self.size) + " assoc: " + str(self.assoc) + " cycles: " + str(self.cycles) + " ---\n"
 		for s in range(2**self.size):
+			printed = False
 			for w in range(2**self.assoc):
-				string += str(self.ways[w][s]) + " "
-			string += "\n"
+				if self.ways[w][s].valid == 1:
+					string += "(" + str(w) + ", " + str(s) + ")" + str(self.ways[w][s]) + " "
+					printed = True
+			if printed:
+				string += "\n"
 		return string
 
 args = parseArgs()
 
+l1 = Cache(args.l1_size ,args.l1_assoc, args.l1_cyc, "L1")
+l2 = Cache(args.l2_size ,args.l2_assoc, args.l2_cyc, "L2")
+
+l1.below = l2
+l2.above = l1
+
+
 file = open(args.file, 'r')
 for line in file:
 	action, address = line.split()
+	
+	# get address
+	address = int(address, 0)
 
-l1 = Cache(3,2,2, "L1")
-l2 = Cache(3,3,3, "L2")
-l2._next = l1
-l1.ways[2][5].tag = 0xc0dec0de
-print(l1)
+	
+	if action == 'w':
+		print("--- writing ---")
+		l1.write(address)
+		
+		
+	
+	if action == 'r':
+		print("--- reading ---")
+		l1.read(address)
+	
+print(l1.accessCounter, l2.accessCounter)
+l1missrate = l1.missCounter / l1.accessCounter
+l2missrate = l2.missCounter / l2.accessCounter
+accTimeAvg = 0
+print("L1miss=" + str(l1missrate) + " " + "L2miss=" + str(l2missrate) + " " + "AccTimeAvg=" + str(accTimeAvg))
+	
 
+#l1 = Cache(args.l1_size ,args.l1_assoc, args.l1_cyc, "L1")
+#l2 = Cache(args.l2_size ,args.l2_assoc, args.l2_cyc, "L2")
 
+# print(l1)
+# print(l2)
 
+# print(l2.printValid())
 
 file.close()
 
