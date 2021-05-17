@@ -1,4 +1,10 @@
 import argparse
+import subprocess
+import os
+
+def copy2clip(string):
+	cmd = 'echo | set /p=' + string.strip() + '|clip'
+	return subprocess.check_call(cmd, shell=True)
 
 parser = argparse.ArgumentParser()
 parser.add_argument('number', type=str)
@@ -16,4 +22,8 @@ with open(command, 'r') as file:
 	string = file.readline()
 
 cmd = "hw2sketch.py " + trace + " " + string
-print(cmd)
+copy2clip(cmd)
+
+with open(output, 'r') as file:
+	string = file.readline()
+	print(string)

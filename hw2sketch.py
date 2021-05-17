@@ -67,6 +67,7 @@ class Cache:
 		self.offsetSize = args.bsize
 		self.setSize = self.size - self.offsetSize - self.assoc
 		self.tagSize = ADDRESS_SIZE - self.setSize - self.offsetSize
+	
 		
 		self.ways = [None] * 2**self.assoc
 		for way in range(2**self.assoc):
@@ -116,7 +117,7 @@ class Cache:
 		return (offset, setnum, tag)
 	
 	def write(self, address):
-		print("writing", self.name)
+		# print("writing", self.name)
 		offset, setnum, tag = self.getFromAddress(address)
 		hit, way = self.search(address)
 		
@@ -124,11 +125,11 @@ class Cache:
 		self.timeAccu += self.cycles
 		
 		if hit:
-			print(" - write hit")
+			# print(" - write hit")
 			self.updateLru(setnum, way)
 			
 		else:
-			print(" - write miss")
+			# print(" - write miss")
 			self.missCounter += 1
 			if self.below:
 				self.below.write(address)
@@ -145,7 +146,7 @@ class Cache:
 			
 			
 	def read(self, address):
-		print("reading", self.name)
+		# print("reading", self.name)
 		offset, setnum, tag = self.getFromAddress(address)
 		hit, way = self.search(address)
 		
@@ -154,10 +155,10 @@ class Cache:
 		
 		if hit:
 			self.updateLru(setnum, way)
-			print(" - read hit")
+			# print(" - read hit")
 			
 		else:
-			print(" - read miss")
+			# print(" - read miss")
 			self.missCounter += 1
 			if self.below:
 				self.below.read(address)
@@ -209,19 +210,19 @@ for line in file:
 
 	
 	if action == 'w':
-		print("--- writing ---")
+		# print("--- writing ---")
 		l1.write(address)
 		
 		
 	
 	if action == 'r':
-		print("--- reading ---")
+		# print("--- reading ---")
 		l1.read(address)
 	
-print(l1.accessCounter, l2.accessCounter)
+# print(l1.accessCounter, l2.accessCounter)
 l1missrate = l1.missCounter / l1.accessCounter
 l2missrate = l2.missCounter / l2.accessCounter
-accTimeAvg = 0
+accTimeAvg = (l1.timeAccu + l2.timeAccu) / l1.accessCounter
 print("L1miss=" + str(l1missrate) + " " + "L2miss=" + str(l2missrate) + " " + "AccTimeAvg=" + str(accTimeAvg))
 	
 
