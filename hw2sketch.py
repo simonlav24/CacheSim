@@ -2,14 +2,6 @@ import argparse
 from random import randint, choice
 from math import log2
 
-# todo:
-# valid:
-	# if need to address it when updating lru
-# dirty
-	# maybe something woth times in the future
-# continue from test 3 fix lru bug
-
-
 ADDRESS_SIZE = 32
 
 def parseArgs():
@@ -95,7 +87,10 @@ class Cache:
 	
 	def search(self, address):
 		offset, setnum, tag = self.getFromAddress(address)
+		if i == 9: print("assoc", self.assoc, 2 ** self.assoc)
+		if i == 9: print(self.ways)
 		for way in range(2 ** self.assoc):
+			if i == 9: print("way: ", way, self.ways[way][setnum].tag, self.ways[way][setnum].valid)
 			if self.ways[way][setnum].tag == tag and self.ways[way][setnum].valid == 1:
 				return (True, way)
 		return (False, -1)
@@ -120,16 +115,17 @@ class Cache:
 		# print("writing", self.name)
 		offset, setnum, tag = self.getFromAddress(address)
 		hit, way = self.search(address)
+		if i == 9: print(address, offset, setnum, tag)
 		
 		self.accessCounter += 1
 		self.timeAccu += self.cycles
 		
 		if hit:
-			# print(" - write hit")
+			if i == 9: print(" - write hit")
 			self.updateLru(setnum, way)
 			
 		else:
-			# print(" - write miss")
+			if i == 9 :print(" - write miss")
 			self.missCounter += 1
 			if self.below:
 				self.below.write(address)
@@ -194,13 +190,16 @@ class Cache:
 
 args = parseArgs()
 
+### MAIN
+
+
 l1 = Cache(args.l1_size ,args.l1_assoc, args.l1_cyc, "L1")
 l2 = Cache(args.l2_size ,args.l2_assoc, args.l2_cyc, "L2")
 
 l1.below = l2
 l2.above = l1
 
-
+i = 0
 file = open(args.file, 'r')
 for line in file:
 	action, address = line.split()
@@ -212,12 +211,16 @@ for line in file:
 	if action == 'w':
 		# print("--- writing ---")
 		l1.write(address)
-		
+		print(i, "r", ":", l1.missCounter, l1.accessCounter, l2.missCounter, l2.accessCounter, l1.timeAccu, l2.timeAccu)
 		
 	
 	if action == 'r':
 		# print("--- reading ---")
 		l1.read(address)
+		print(i, "r", ":", l1.missCounter, l1.accessCounter, l2.missCounter, l2.accessCounter, l1.timeAccu, l2.timeAccu)
+	i += 1
+	
+print(l1.missCounter, l1.accessCounter, l2.missCounter, l2.accessCounter, l1.timeAccu, l2.timeAccu)
 	
 # print(l1.accessCounter, l2.accessCounter)
 l1missrate = l1.missCounter / l1.accessCounter
@@ -226,13 +229,6 @@ accTimeAvg = (l1.timeAccu + l2.timeAccu) / l1.accessCounter
 print("L1miss=" + str(l1missrate) + " " + "L2miss=" + str(l2missrate) + " " + "AccTimeAvg=" + str(accTimeAvg))
 	
 
-#l1 = Cache(args.l1_size ,args.l1_assoc, args.l1_cyc, "L1")
-#l2 = Cache(args.l2_size ,args.l2_assoc, args.l2_cyc, "L2")
-
-# print(l1)
-# print(l2)
-
-# print(l2.printValid())
 
 file.close()
 

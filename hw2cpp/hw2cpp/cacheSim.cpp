@@ -7,6 +7,10 @@
 #include <math.h>
 
 #define ADDRESS_SIZE 32
+#define PTWO2(x) (1 << (x))
+#define PTWO(x) (pow(2, (x)))
+#define DEBUG if(debug) cout << "[DEBUG] "
+bool debug = false;
 
 using std::FILE;
 using std::string;
@@ -23,19 +27,17 @@ struct cacheEntry {
 	int dirty;
 };
 
+void printEntry(cacheEntry x) {
+	cout << x.valid << " | " << x.dirty << " | " << x.tag << endl;
+}
+
 // cache class
 class cache {
 	// parameters:
 	int size;
 	int assoc;
 	int cycles;
-	// cache level pointers 
-	cache* below;
-	cache* above;
-	// counters 
-	int timeAccu;
-	int missCounter;
-	int accessCounter;
+	
 	// field sizes
 	int offsetSize;
 	int memCycles;
@@ -48,7 +50,17 @@ class cache {
 	int** lru;
 	
 public:
-	cache(int size, int assoc, int cycles, unsigned blockSize, unsigned memCycles, unsigned writeAlloc){
+
+	// counters 
+	int timeAccu;
+	int missCounter;
+	int accessCounter;
+
+	// cache level pointers 
+	cache* below;
+	cache* above;
+
+	cache(unsigned size, unsigned assoc, unsigned cycles, unsigned blockSize, unsigned memCycles, unsigned writeAlloc){
 		this->size = size;
 		this->assoc = assoc;
 		this->cycles = cycles;
@@ -64,38 +76,50 @@ public:
 		this->tagSize = ADDRESS_SIZE - this->setSize - this->offsetSize;
 
 		// allocating ways array
-		this->ways = new cacheEntry * [pow(2, this->assoc)];
-		for (int way = 0; way < pow(2, this->assoc); way++) {
-			this->ways[way] = new cacheEntry[pow(2, this->setSize)];
+		this->ways = new cacheEntry * [PTWO(this->assoc)];
+		for (int way = 0; way < PTWO(this->assoc); way++) {
+			this->ways[way] = new cacheEntry[PTWO(this->setSize)];
+			for (int setnum = 0; setnum < PTWO(this->setSize); setnum++) {
+				this->ways[way][setnum].dirty = 0;
+				this->ways[way][setnum].valid = 0;
+				this->ways[way][setnum].tag = 0;
+			}
 		}
 
 		// allocating and initializing lru array
-		this->lru = new int*[pow(2, this->setSize)];
-		for (int i = 0; i < pow(2, this->setSize); i++) {
-			lru[i] = new int[pow(2, this->assoc)];
-			for (int j = 0; j < pow(2, this->assoc); j++) {
+		this->lru = new int*[PTWO(this->setSize)];
+		for (int i = 0; i < PTWO(this->setSize); i++) {
+			lru[i] = new int[PTWO(this->assoc)];
+			for (int j = 0; j < PTWO(this->assoc); j++) {
 				lru[i][j] = j;
 			}
 		}
 	}
 	~cache() {
 		// deallocating ways array
-		for (int way = 0; way < pow(2, this->assoc); way++) {
+		for (int way = 0; way < PTWO(this->assoc); way++) {
 			delete[] this->ways[way];
 		}
 		delete[] ways;
 
 		// deallocating lru array
-		for (int i = 0; i < pow(2, this->setSize); i++) {
+		for (int i = 0; i < PTWO(this->setSize); i++) {
 			delete[] lru[i];
 		}
 		delete[] lru;
 	}
 
+	/*void printWays() {
+		for (int way = 0; way < PTWO(assoc); way++) {
+			cout << "way " << way << ": " << endl;
+			for (int setnum)
+		}
+	}*/
+
 	void updateLru(int setnum, int way) {
 		int x = lru[setnum][way];
-		lru[setnum][way] = pow(2, assoc) - 1;
-		for (int j = 0; j < pow(2, assoc); j++) {
+		lru[setnum][way] = PTWO(assoc) - 1;
+		for (int j = 0; j < PTWO(assoc); j++) {
 			if (j != way && lru[setnum][j] > x) {
 				lru[setnum][j] -= 1;
 			}
@@ -103,7 +127,7 @@ public:
 	}
 	
 	int getLruMin(int setnum) {
-		for (int i = 0; i < pow(2, assoc); i++)
+		for (int i = 0; i < PTWO(assoc); i++)
 			if (lru[setnum][i] == 0)
 				return i;
 		return -1;
@@ -113,28 +137,34 @@ public:
 		uint32_t offset, setnum, tag;
 		getFromAddress(address, &offset, &setnum, &tag);
 
-		for (int way = 0; way < pow(2, assoc); way++)
-			if (ways[way][setnum].tag == tag && ways[way][setnum].valid == 1)
+		DEBUG << "assoc " << assoc << " " << PTWO(assoc) << endl;
+		for (int way = 0; way < PTWO(assoc); way++) {
+			DEBUG << "way: " << way << " " << ways[way][setnum].tag << " " << ways[way][setnum].valid << endl;
+			if (ways[way][setnum].tag == tag && ways[way][setnum].valid == 1) {
 				return way;
+			}
+		}
 		return -1;
 	}
 
 	void getFromAddress(uint32_t address, uint32_t* offset, uint32_t* setnum, uint32_t* tag) {
 		uint32_t mask;
 
-		mask = pow(2, offsetSize) - 1;
-		*offset = mask & address; // was address in py
+		mask = PTWO(offsetSize) - 1;
+		*offset = mask & address;
 
-		mask = (pow(2, setSize) - 1) * pow(2, offsetSize);
+		mask = (PTWO(setSize) - 1) * PTWO(offsetSize);
 		*setnum = (mask & address) >> offsetSize;
 
-		mask = (pow(2, tagSize) - 1) * pow(2, offsetSize + setSize);
+		mask = (PTWO(tagSize) - 1) * PTWO(offsetSize + setSize);
 		*tag = (mask & address) >> (offsetSize + setSize);
 	}
 
 	void write(uint32_t address) {
 		uint32_t offset, setnum, tag;
 		getFromAddress(address, &offset, &setnum, &tag);
+
+		DEBUG << address << " " << offset << " " << setnum << " " << tag << endl;
 
 		int way = search(address);
 		bool hit = way != -1;
@@ -143,9 +173,11 @@ public:
 		timeAccu += cycles;
 
 		if (hit) {
+			DEBUG << "write hit" << endl;
 			updateLru(setnum, way);
 		}
 		else {
+			DEBUG << "write miss" << endl;
 			missCounter++;
 			if (below != nullptr)
 				below->write(address);
@@ -183,35 +215,17 @@ public:
 			else
 				timeAccu += memCycles;
 
-			if (writeAlloc) {
-				int x = getLruMin(setnum);
-				ways[x][setnum].tag = tag;
-				ways[x][setnum].valid = 1;
-				updateLru(setnum, x);
-			}
+			
+			int x = getLruMin(setnum);
+			ways[x][setnum].tag = tag;
+			ways[x][setnum].valid = 1;
+			updateLru(setnum, x);
+			
 		}
 
 	}
-	/*		
-		
-		if hit:
-			self.updateLru(setnum, way)
-			# print(" - read hit")
-			
-		else:
-			# print(" - read miss")
-			self.missCounter += 1
-			if self.below:
-				self.below.read(address)
-			else:
-				self.timeAccu += args.mem_cyc
-			
-			# add to self according to lru
-			x = self.getLruMin(setnum)
-			self.ways[x][setnum].tag = tag
-			self.ways[x][setnum].valid = 1
-			self.updateLru(setnum, x)*/
 
+	
 };
 
 int main(int argc, char **argv) {
@@ -220,7 +234,6 @@ int main(int argc, char **argv) {
 		cerr << "Not enough arguments" << endl;
 		return 0;
 	}
-	cout << "hello" << endl;
 	// Get input arguments
 
 	// File
@@ -263,6 +276,13 @@ int main(int argc, char **argv) {
 		}
 	}
 
+	// setup
+	cache L1(L1Size, L1Assoc, L1Cyc, BSize, MemCyc, WrAlloc);
+	cache L2(L2Size, L2Assoc, L2Cyc, BSize, MemCyc, WrAlloc);
+	
+	L1.below = &L2;
+	L2.above = &L1;
+
 	while (getline(file, line)) {
 
 		stringstream ss(line);
@@ -275,24 +295,42 @@ int main(int argc, char **argv) {
 		}
 
 		// DEBUG - remove this line
-		cout << "operation: " << operation;
+		//cout << "operation: " << operation;
 
 		string cutAddress = address.substr(2); // Removing the "0x" part of the address
 
 		// DEBUG - remove this line
-		cout << ", address (hex)" << cutAddress;
+		//cout << ", address (hex)" << cutAddress;
 
 		unsigned long int num = 0;
 		num = strtoul(cutAddress.c_str(), NULL, 16);
 
 		// DEBUG - remove this line
-		cout << " (dec) " << num << endl;
+		//cout << " (dec) " << num << endl;
+		static int i = 0;
+		//if (i == 9) debug = true; else debug = false;
+
+		if (operation == 'w') {
+			L1.write(num);
+			//cout << i << ": " << L1.missCounter << " " << L1.accessCounter << ", " << L2.missCounter << " " << L2.accessCounter << ", " << L1.timeAccu << " " << L2.timeAccu << endl;
+		}
+
+		if (operation == 'r') {
+			L1.read(num);
+			//cout << i << ": " << L1.missCounter << " " << L1.accessCounter << ", " << L2.missCounter << " " << L2.accessCounter << ", " << L1.timeAccu << " " << L2.timeAccu << endl;
+		}
+		i += 1;
 
 	}
 
 	double L1MissRate = 0;
 	double L2MissRate = 0;
 	double avgAccTime = 0;
+
+
+	L1MissRate = (double)L1.missCounter / (double)L1.accessCounter;
+	L2MissRate = (double)L2.missCounter / (double)L2.accessCounter;
+	avgAccTime = ((double)L1.timeAccu + (double)L2.timeAccu) / (double)L1.accessCounter;
 
 	printf("L1miss=%.03f ", L1MissRate);
 	printf("L2miss=%.03f ", L2MissRate);
