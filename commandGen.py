@@ -27,11 +27,16 @@ with open(command, 'r') as file:
 
 if args.prog == "py":
 	program = "hw2sketch.py "
+elif args.prog == 'u':
+	program = "./cacheSim "
 else:
 	program = "hw2cpp\Debug\hw2cpp.exe "
 	
 cmd = program + trace + " " + string
-copy2clip(cmd)
+if args.prog == 'u':
+	print(cmd)
+else:
+	copy2clip(cmd)
 
 with open(output, 'r') as file:
 	string = file.readline()
