@@ -1,7 +1,7 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="Current" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-    <LocalDebuggerCommandArguments>.\..\..\tests\example1_trace --mem-cyc 300 --bsize 4 --wr-alloc 0 --l1-size 8 --l1-assoc 0 --l1-cyc 2 --l2-size 15 --l2-assoc 6 --l2-cyc 40</LocalDebuggerCommandArguments>
+    <LocalDebuggerCommandArguments>.\..\..\tests2\example3_trace --mem-cyc 10 --bsize 2 --wr-alloc 1 --l1-size 4 --l1-assoc 1 --l1-cyc 1 --l2-size 4 --l2-assoc 2 --l2-cyc 5</LocalDebuggerCommandArguments>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
   </PropertyGroup>
 </Project>

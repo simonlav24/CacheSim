@@ -22,9 +22,10 @@ using std::stringstream;
 
 // cahce entry - a cache line
 struct cacheEntry {
-	int tag;
+	uint32_t tag;
 	int valid;
 	int dirty;
+	uint32_t address;
 };
 
 void printEntry(cacheEntry x) {
@@ -83,6 +84,7 @@ public:
 				this->ways[way][setnum].dirty = 0;
 				this->ways[way][setnum].valid = 0;
 				this->ways[way][setnum].tag = 0;
+				this->ways[way][setnum].address = 0;
 			}
 		}
 
@@ -115,6 +117,17 @@ public:
 			for (int setnum)
 		}
 	}*/
+
+	void getWayLruByAddress(uint32_t address, int* _way, uint32_t* _setnum) {
+		uint32_t offset, setnum, tag;
+		getFromAddress(address, &offset, &setnum, &tag);
+		for (int way = 0; way < PTWO(assoc); way++) {
+			if (ways[way][setnum].tag == tag) {
+				*_way = way;
+				*_setnum = setnum;
+			}
+		}
+	}
 
 	void updateLru(int setnum, int way) {
 		int x = lru[setnum][way];
@@ -160,6 +173,8 @@ public:
 		*tag = (mask & address) >> (offsetSize + setSize);
 	}
 
+
+
 	void write(uint32_t address) {
 		uint32_t offset, setnum, tag;
 		getFromAddress(address, &offset, &setnum, &tag);
@@ -184,11 +199,38 @@ public:
 			else
 				timeAccu += memCycles;
 
+			// add to self according to lru
 			if (writeAlloc) {
 				int x = getLruMin(setnum);
+
+				// check if x is dirty
+				if (ways[x][setnum].dirty == 1) {
+					if (below != nullptr) {
+						int y; uint32_t ySet;
+						getWayLruByAddress(ways[x][setnum].address, &y, &ySet);
+						below->ways[y][ySet].dirty = 1;
+						below->updateLru(ySet, y);
+					}
+				}
+
+				// check if we remove something:
+				if (ways[x][setnum].valid == 1) {
+					// check for lower level for the inclusion thingy
+					if (above != nullptr) {
+						int wayAbove = above->search(ways[x][setnum].address);
+						if (wayAbove != -1) {
+							uint32_t offsetAbove, setnumAbove, tagAbove;
+							above->getFromAddress(ways[x][setnum].address, &offsetAbove, &setnumAbove, &tagAbove);
+							above->ways[wayAbove][setnumAbove].valid = 0;
+						}
+					}
+				}
+
+				
 				ways[x][setnum].tag = tag;
 				ways[x][setnum].valid = 1;
 				ways[x][setnum].dirty = 1;
+				ways[x][setnum].address = address;
 				updateLru(setnum, x);
 			}
 		}
@@ -217,8 +259,33 @@ public:
 
 			
 			int x = getLruMin(setnum);
+
+			// check if x is dirty
+			if (ways[x][setnum].dirty == 1) {
+				if (below != nullptr) {
+					int y; uint32_t ySet;
+					getWayLruByAddress(ways[x][setnum].address, &y, &ySet);
+					below->ways[y][ySet].dirty = 1;
+					below->updateLru(ySet, y);
+				}
+			}
+
+			// check if we remove something:
+			if (ways[x][setnum].valid == 1) {
+				// check for lower level for the inclusion thingy
+				if (above != nullptr) {
+					int wayAbove = above->search(ways[x][setnum].address);
+					if (wayAbove != -1) {
+						uint32_t offsetAbove, setnumAbove, tagAbove;
+						above->getFromAddress(ways[x][setnum].address, &offsetAbove, &setnumAbove, &tagAbove);
+						above->ways[wayAbove][setnumAbove].valid = 0;
+					}
+				}
+			}
+
 			ways[x][setnum].tag = tag;
 			ways[x][setnum].valid = 1;
+			ways[x][setnum].address = address;
 			updateLru(setnum, x);
 			
 		}

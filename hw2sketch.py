@@ -33,11 +33,14 @@ def parseArgs():
 def binary(x):
 	return format(x, "032b")
 
+debug = False 
+
 class CacheEntry:
 	def __init__(self):
 		self.tag = 0
 		self.valid = 0
 		self.dirty = 0
+		self.address = 0
 	def __str__(self):
 		return "[ " + str(self.valid) + " | " + str(self.dirty) + " | " + '{:10}'.format(hex(self.tag)) + " ]"
 	def __repr__(self):
@@ -87,18 +90,18 @@ class Cache:
 	
 	def search(self, address):
 		offset, setnum, tag = self.getFromAddress(address)
-		if i == 9: print("assoc", self.assoc, 2 ** self.assoc)
-		if i == 9: print(self.ways)
+		
 		for way in range(2 ** self.assoc):
-			if i == 9: print("way: ", way, self.ways[way][setnum].tag, self.ways[way][setnum].valid)
 			if self.ways[way][setnum].tag == tag and self.ways[way][setnum].valid == 1:
 				return (True, way)
 		return (False, -1)
 	
-	def getFromAddress(self, pc):
+	def getFromAddress(self, address):
 		offsetSize = args.bsize
 		setSize = self.size - offsetSize - self.assoc
 		tagSize = ADDRESS_SIZE - setSize - offsetSize
+		if debug:print("offsetSize:", offsetSize, "setSize:", setSize, "tagSize:", tagSize)
+		
 		
 		mask = 2**(offsetSize) - 1
 		offset = mask & address
@@ -108,24 +111,42 @@ class Cache:
 		
 		mask = (2**(tagSize) - 1) * 2**(offsetSize + setSize)
 		tag = (mask & address) >> (offsetSize + setSize)
-	
+		
+		if debug:print("cache:", self.name, "address:", address, "tag:", hex(tag), "setnum:", setnum, "offset:", offset)
+		
 		return (offset, setnum, tag)
+	
+	# def buildAddress(self, offset, setnum, tag):
+		# address = tag
+		# address = address << (self.setSize)
+		# address += setnum
+		# address = address << (self.offsetSize)
+		# address += offset
+		# print(hex(address))
+		# return address
+	
+	def getWayLruByAddress(self, address):
+		offset, setnum, tag = self.getFromAddress(address)
+		for way in range(2**self.assoc):
+			if self.ways[way][setnum].tag == tag:
+				if debug:print("wayyyyy:", way)
+				return (way, setnum)
+		return (-1, -1)
 	
 	def write(self, address):
 		# print("writing", self.name)
 		offset, setnum, tag = self.getFromAddress(address)
+		if debug:print(offset, setnum, hex(tag))
 		hit, way = self.search(address)
-		if i == 9: print(address, offset, setnum, tag)
+		
 		
 		self.accessCounter += 1
 		self.timeAccu += self.cycles
 		
 		if hit:
-			if i == 9: print(" - write hit")
 			self.updateLru(setnum, way)
 			
 		else:
-			if i == 9 :print(" - write miss")
 			self.missCounter += 1
 			if self.below:
 				self.below.write(address)
@@ -135,15 +156,35 @@ class Cache:
 			# add to self according to lru
 			if args.wr_alloc == 1: # write allocate (need to bring into cache)
 				x = self.getLruMin(setnum)
+				# check if x is dirty:
+				if self.ways[x][setnum].dirty == 1:
+					if(self.below):
+						y, ySet = self.below.getWayLruByAddress(self.ways[x][setnum].address)
+						if debug:print("way of thing to update:", y, "set of the thing to update:", ySet)
+						self.below.ways[y][ySet].dirty = 1
+						self.below.updateLru(ySet, y)
+				
+				# check if we remove something:
+				if self.ways[x][setnum].valid == 1:
+					# check for lower level for the inclusion thingy
+					if self.above:
+						hitAbove, wayAbove = self.above.search(self.ways[x][setnum].address)
+						if hitAbove:
+							# remove by invalidating:
+							offsetAbove, setnumAbove, tagAbove = self.above.getFromAddress(self.ways[x][setnum].address)
+							self.above.ways[wayAbove][setnumAbove].valid = 0
+				
 				self.ways[x][setnum].tag = tag
 				self.ways[x][setnum].valid = 1
 				self.ways[x][setnum].dirty = 1
+				self.ways[x][setnum].address = address
 				self.updateLru(setnum, x)
 			
 			
 	def read(self, address):
 		# print("reading", self.name)
 		offset, setnum, tag = self.getFromAddress(address)
+		if debug:print(offset, setnum, hex(tag))
 		hit, way = self.search(address)
 		
 		self.accessCounter += 1
@@ -163,18 +204,40 @@ class Cache:
 			
 			# add to self according to lru
 			x = self.getLruMin(setnum)
+			if self.ways[x][setnum].dirty == 1:
+					if(self.below):
+						y, ySet = self.below.getWayLruByAddress(self.ways[x][setnum].address)
+						if debug:print("way of thing to update:", y, "set of the thing to update:", ySet)
+						self.below.ways[y][ySet].dirty = 1
+						self.below.updateLru(ySet, y)
+			
+			# check if we remove something:
+			if self.ways[x][setnum].valid == 1:
+				# check for lower level for the inclusion thingy
+				if self.above:
+					hitAbove, wayAbove = self.above.search(self.ways[x][setnum].address)
+					if hitAbove:
+						# remove by invalidating:
+						offsetAbove, setnumAbove, tagAbove = self.above.getFromAddress(self.ways[x][setnum].address)
+						self.above.ways[wayAbove][setnumAbove].valid = 0
+			
 			self.ways[x][setnum].tag = tag
 			self.ways[x][setnum].valid = 1
+			self.ways[x][setnum].address = address
 			self.updateLru(setnum, x)
 			
 	
 	
 	def __str__(self):
 		string = '--- Cache: ' + self.name + ' size: ' + str(self.size) + " assoc: " + str(self.assoc) + " cycles: " + str(self.cycles) + " ---\n"
-		# for s in range(2**self.size):
-			# for w in range(2**self.assoc):
-				# string += str(self.ways[w][s]) + " "
-			# string += "\n"
+		for setnum in range(2**self.setSize):
+			for way in range(2**self.assoc):
+				string += str(self.ways[way][setnum].valid) + " | " + str(self.ways[way][setnum].dirty) + " | " + hex(self.ways[way][setnum].tag)
+				string += "    "
+			string += "\n"
+		
+		# string += str(self.ways) + "\n"
+		string += str(self.lru) + "\n"
 		return string
 	def printValid(self):
 		string = '--- Cache: ' + self.name + ' size: ' + str(self.size) + " assoc: " + str(self.assoc) + " cycles: " + str(self.cycles) + " ---\n"
@@ -192,12 +255,17 @@ args = parseArgs()
 
 ### MAIN
 
-
 l1 = Cache(args.l1_size ,args.l1_assoc, args.l1_cyc, "L1")
 l2 = Cache(args.l2_size ,args.l2_assoc, args.l2_cyc, "L2")
 
 l1.below = l2
 l2.above = l1
+
+
+# offsetT, setnumT, tagT = l1.getFromAddress(0x12345678)
+# l1.buildAddress(offsetT, setnumT, tagT)
+# print(1/0)
+
 
 i = 0
 file = open(args.file, 'r')
@@ -207,20 +275,24 @@ for line in file:
 	# get address
 	address = int(address, 0)
 
-	
+	if debug:print("address:", hex(address))
 	if action == 'w':
 		# print("--- writing ---")
 		l1.write(address)
-		print(i, "r", ":", l1.missCounter, l1.accessCounter, l2.missCounter, l2.accessCounter, l1.timeAccu, l2.timeAccu)
+		if debug:print(l1)
+		if debug:print(l2)
+		#print(i, "r", ":", l1.missCounter, l1.accessCounter, l2.missCounter, l2.accessCounter, l1.timeAccu, l2.timeAccu)
 		
 	
 	if action == 'r':
 		# print("--- reading ---")
 		l1.read(address)
-		print(i, "r", ":", l1.missCounter, l1.accessCounter, l2.missCounter, l2.accessCounter, l1.timeAccu, l2.timeAccu)
+		if debug:print(l1)
+		if debug:print(l2)
+		#rint(i, "r", ":", l1.missCounter, l1.accessCounter, l2.missCounter, l2.accessCounter, l1.timeAccu, l2.timeAccu)
 	i += 1
 	
-print(l1.missCounter, l1.accessCounter, l2.missCounter, l2.accessCounter, l1.timeAccu, l2.timeAccu)
+if debug:print(l1.missCounter, l1.accessCounter, l2.missCounter, l2.accessCounter, l1.timeAccu, l2.timeAccu)
 	
 # print(l1.accessCounter, l2.accessCounter)
 l1missrate = l1.missCounter / l1.accessCounter
