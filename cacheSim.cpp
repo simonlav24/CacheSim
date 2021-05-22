@@ -152,7 +152,7 @@ public:
 	}
 
 	void getFromAddress(unsigned long int address, unsigned* offset, unsigned* setnum, unsigned* tag) {
-		unsigned mask;
+		unsigned long int mask=PTWO(offsetSize) - 1;
 
 		mask = PTWO(offsetSize) - 1;
 		*offset = mask & address;
@@ -183,7 +183,7 @@ public:
 		else {
 			DEBUG << "write miss" << endl;
 			missCounter++;
-			if (below != nullptr)
+			if (below != NULL)
 				below->write(address);
 			else
 				timeAccu += memCycles;
@@ -194,7 +194,7 @@ public:
 
 				// check if x is dirty
 				if (ways[x][setnum].dirty == 1) {
-					if (below != nullptr) {
+					if (below != NULL) {
 						int y=0; unsigned ySet=0;
 						getWayLruByAddress(ways[x][setnum].address, &y, &ySet);
 						below->ways[y][ySet].dirty = 1;
@@ -205,7 +205,7 @@ public:
 				// check if we remove something:
 				if (ways[x][setnum].valid == 1) {
 					// check for lower level for the inclusion thingy
-					if (above != nullptr) {
+					if (above != NULL) {
 						int wayAbove = above->search(ways[x][setnum].address);
 						if (wayAbove != -1) {
 							unsigned offsetAbove=0, setnumAbove=0, tagAbove=0;
@@ -239,7 +239,7 @@ public:
 		}
 		else {
 			missCounter++;
-			if (below != nullptr)
+			if (below != NULL)
 				below->read(address);
 			else
 				timeAccu += memCycles;
@@ -248,7 +248,7 @@ public:
 
 			// check if x is dirty
 			if (ways[x][setnum].dirty == 1) {
-				if (below != nullptr) {
+				if (below != NULL) {
 					int y=0; unsigned ySet=0;
 					getWayLruByAddress(ways[x][setnum].address, &y, &ySet);
 					below->ways[y][ySet].dirty = 1;
@@ -259,7 +259,7 @@ public:
 			// check if we remove something:
 			if (ways[x][setnum].valid == 1) {
 				// check for lower level for the inclusion thingy
-				if (above != nullptr) {
+				if (above != NULL) {
 					int wayAbove = above->search(ways[x][setnum].address);
 					if (wayAbove != -1) {
 						unsigned offsetAbove=0, setnumAbove=0, tagAbove=0;
