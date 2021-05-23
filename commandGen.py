@@ -2,8 +2,8 @@ import argparse
 import subprocess
 import os
 
-testsFolder = "tests2"
-# testsFolder = "tests"
+# testsFolder = "tests2"
+testsFolder = "tests"
 
 def copy2clip(string):
 	cmd = 'echo | set /p=' + string.strip() + '|clip'
@@ -34,10 +34,12 @@ else:
 	
 cmd = program + trace + " " + string
 if args.prog == 'u':
-	print(cmd)
+	print("hw output:")
+	os.system(cmd)
 else:
 	copy2clip(cmd)
 
 with open(output, 'r') as file:
 	string = file.readline()
+	print("desired output:")
 	print(string)

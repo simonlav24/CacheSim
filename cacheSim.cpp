@@ -26,6 +26,7 @@ struct cacheEntry {
 	unsigned long int address;
 };
 
+// debug print entry
 void printEntry(cacheEntry x) {
 	cout << x.valid << " | " << x.dirty << " | " << x.tag << endl;
 }
@@ -59,6 +60,7 @@ public:
 	cache* below;
 	cache* above;
 
+    // constructor
 	cache(unsigned int size, unsigned int assoc, unsigned int cycles, unsigned int blockSize, unsigned int memCycles, unsigned int writeAlloc){
 		this->size = size;
 		this->assoc = assoc;
@@ -98,6 +100,7 @@ public:
         below = NULL;
         above = NULL;
 	}
+    // distructor
 	~cache() {
 		// deallocating ways array
 		for (int way = 0; way < PTWO(this->assoc); way++) {
@@ -112,6 +115,7 @@ public:
 		delete[] lru;
 	}
 
+    // get way and set of address to update LRU
 	void getWayLruByAddress(unsigned long int address, int* _way, unsigned int* _setnum) {
 		unsigned int offset=0, setnum=0, tag=0;
 		getFromAddress(address, &offset, &setnum, &tag);
@@ -123,6 +127,7 @@ public:
 		}
 	}
 
+    // update LRU based on set and way
 	void updateLru(unsigned int setnum, int way) {
 		int x = lru[setnum][way];
 		lru[setnum][way] = PTWO(assoc) - 1;
@@ -133,6 +138,7 @@ public:
 		}
 	}
 	
+    // get the minimum LRU value (oldest accessed)
 	int getLruMin(unsigned int setnum) {
 		for (int i = 0; i < PTWO(assoc); i++)
 			if (lru[setnum][i] == 0)
@@ -140,13 +146,12 @@ public:
 		return -1;
 	}
 
+    // search cache by address
 	int search(unsigned long int address) {
 		unsigned int offset=0, setnum=0, tag=0;
 		getFromAddress(address, &offset, &setnum, &tag);
 
-		//DEBUG << "assoc " << assoc << " " << PTWO(assoc) << endl;
 		for (int way = 0; way < PTWO(assoc); way++) {
-			//DEBUG << "way: " << way << " " << ways[way][setnum].tag << " " << ways[way][setnum].valid << endl;
 			if (ways[way][setnum].tag == tag && ways[way][setnum].valid == 1) {
 				return way;
 			}
@@ -154,6 +159,7 @@ public:
 		return -1;
 	}
 
+    // parse address to get offset, set and tag
 	void getFromAddress(unsigned long int address, unsigned int* offset, unsigned int* setnum, unsigned int* tag) {
 		unsigned long int mask=PTWO(offsetSize) - 1;
 
@@ -167,7 +173,9 @@ public:
 		*tag = (mask & address) >> (offsetSize + setSize);
 	}
 
+    // write Function
 	void write(unsigned long int address) {
+        // parse address
 		unsigned int offset=0, setnum=0, tag=0;
 		getFromAddress(address, &offset, &setnum, &tag);
 
@@ -175,10 +183,11 @@ public:
 
 		int way = search(address);
 		bool hit = way != -1;
-
+        // update counters
 		accessCounter++;
 		timeAccu += cycles;
 
+        // maintain cache and LRU
 		if (hit) {
 			DEBUG << "write hit" << endl;
 			updateLru(setnum, way);
@@ -217,7 +226,7 @@ public:
 						}
 					}
 				}
-				
+				// add to cache
 				ways[x][setnum].tag = tag;
 				ways[x][setnum].valid = 1;
 				ways[x][setnum].dirty = 1;
@@ -228,15 +237,17 @@ public:
 	}
 
 	void read(unsigned long int address) {
-		unsigned int offset=0, setnum=0, tag=0;
+		// parse address
+        unsigned int offset=0, setnum=0, tag=0;
 		getFromAddress(address, &offset, &setnum, &tag);
-
+        
 		int way = search(address);
 		bool hit = way != -1;
-
+        // update counters
 		accessCounter += 1;
 		timeAccu += cycles;
 
+        // maintain cache and LRU
 		if (hit) {
 			updateLru(setnum, way);
 		}
@@ -271,12 +282,11 @@ public:
 					}
 				}
 			}
-
+            // add to cache
 			ways[x][setnum].tag = tag;
 			ways[x][setnum].valid = 1;
 			ways[x][setnum].address = address;
 			updateLru(setnum, x);
-			
 		}
 	}
 };
@@ -365,6 +375,7 @@ int main(int argc, char **argv) {
 	double L2MissRate = 0;
 	double avgAccTime = 0;
 
+    // calculate results data
 	L1MissRate = (double)L1.missCounter / (double)L1.accessCounter;
 	L2MissRate = (double)L2.missCounter / (double)L2.accessCounter;
 	avgAccTime = ((double)L1.timeAccu + (double)L2.timeAccu) / (double)L1.accessCounter;
