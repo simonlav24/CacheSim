@@ -20,7 +20,7 @@ using std::stringstream;
 
 // cahce entry - a cache line
 struct cacheEntry {
-	unsigned tag;
+	unsigned int tag;
 	int valid;
 	int dirty;
 	unsigned long int address;
@@ -33,16 +33,16 @@ void printEntry(cacheEntry x) {
 // cache class
 class cache {
 	// parameters:
-	unsigned size;
-	unsigned assoc;
-	unsigned cycles;
+	unsigned int size;
+	unsigned int assoc;
+	unsigned int cycles;
 	
 	// field sizes
-	unsigned offsetSize;
-	unsigned memCycles;
+	unsigned int offsetSize;
+	unsigned int memCycles;
 	bool writeAlloc;
-	unsigned setSize;
-	unsigned tagSize;
+	unsigned int setSize;
+	unsigned int tagSize;
 	// ways 2darray of cache entries
 	cacheEntry** ways;
 	// lru array 
@@ -51,15 +51,15 @@ class cache {
 public:
 
 	// counters 
-	unsigned timeAccu;
-	unsigned missCounter;
-	unsigned accessCounter;
+	unsigned int timeAccu;
+	unsigned int missCounter;
+	unsigned int accessCounter;
 
 	// cache level pointers 
 	cache* below;
 	cache* above;
 
-	cache(unsigned size, unsigned assoc, unsigned cycles, unsigned blockSize, unsigned memCycles, unsigned writeAlloc){
+	cache(unsigned int size, unsigned int assoc, unsigned int cycles, unsigned int blockSize, unsigned int memCycles, unsigned int writeAlloc){
 		this->size = size;
 		this->assoc = assoc;
 		this->cycles = cycles;
@@ -94,6 +94,9 @@ public:
 				lru[i][j] = j;
 			}
 		}
+        
+        below = NULL;
+        above = NULL;
 	}
 	~cache() {
 		// deallocating ways array
@@ -109,8 +112,8 @@ public:
 		delete[] lru;
 	}
 
-	void getWayLruByAddress(unsigned long int address, int* _way, unsigned* _setnum) {
-		unsigned offset=0, setnum=0, tag=0;
+	void getWayLruByAddress(unsigned long int address, int* _way, unsigned int* _setnum) {
+		unsigned int offset=0, setnum=0, tag=0;
 		getFromAddress(address, &offset, &setnum, &tag);
 		for (int way = 0; way < PTWO(assoc); way++) {
 			if (ways[way][setnum].tag == tag) {
@@ -120,7 +123,7 @@ public:
 		}
 	}
 
-	void updateLru(unsigned setnum, int way) {
+	void updateLru(unsigned int setnum, int way) {
 		int x = lru[setnum][way];
 		lru[setnum][way] = PTWO(assoc) - 1;
 		for (int j = 0; j < PTWO(assoc); j++) {
@@ -130,7 +133,7 @@ public:
 		}
 	}
 	
-	int getLruMin(unsigned setnum) {
+	int getLruMin(unsigned int setnum) {
 		for (int i = 0; i < PTWO(assoc); i++)
 			if (lru[setnum][i] == 0)
 				return i;
@@ -138,7 +141,7 @@ public:
 	}
 
 	int search(unsigned long int address) {
-		unsigned offset=0, setnum=0, tag=0;
+		unsigned int offset=0, setnum=0, tag=0;
 		getFromAddress(address, &offset, &setnum, &tag);
 
 		//DEBUG << "assoc " << assoc << " " << PTWO(assoc) << endl;
@@ -151,7 +154,7 @@ public:
 		return -1;
 	}
 
-	void getFromAddress(unsigned long int address, unsigned* offset, unsigned* setnum, unsigned* tag) {
+	void getFromAddress(unsigned long int address, unsigned int* offset, unsigned int* setnum, unsigned int* tag) {
 		unsigned long int mask=PTWO(offsetSize) - 1;
 
 		mask = PTWO(offsetSize) - 1;
@@ -165,7 +168,7 @@ public:
 	}
 
 	void write(unsigned long int address) {
-		unsigned offset=0, setnum=0, tag=0;
+		unsigned int offset=0, setnum=0, tag=0;
 		getFromAddress(address, &offset, &setnum, &tag);
 
 		DEBUG << address << " " << offset << " " << setnum << " " << tag << endl;
@@ -195,7 +198,7 @@ public:
 				// check if x is dirty
 				if (ways[x][setnum].dirty == 1) {
 					if (below != NULL) {
-						int y=0; unsigned ySet=0;
+						int y=0; unsigned int ySet=0;
 						getWayLruByAddress(ways[x][setnum].address, &y, &ySet);
 						below->ways[y][ySet].dirty = 1;
 						below->updateLru(ySet, y);
@@ -208,7 +211,7 @@ public:
 					if (above != NULL) {
 						int wayAbove = above->search(ways[x][setnum].address);
 						if (wayAbove != -1) {
-							unsigned offsetAbove=0, setnumAbove=0, tagAbove=0;
+							unsigned int offsetAbove=0, setnumAbove=0, tagAbove=0;
 							above->getFromAddress(ways[x][setnum].address, &offsetAbove, &setnumAbove, &tagAbove);
 							above->ways[wayAbove][setnumAbove].valid = 0;
 						}
@@ -225,7 +228,7 @@ public:
 	}
 
 	void read(unsigned long int address) {
-		unsigned offset=0, setnum=0, tag=0;
+		unsigned int offset=0, setnum=0, tag=0;
 		getFromAddress(address, &offset, &setnum, &tag);
 
 		int way = search(address);
@@ -249,7 +252,7 @@ public:
 			// check if x is dirty
 			if (ways[x][setnum].dirty == 1) {
 				if (below != NULL) {
-					int y=0; unsigned ySet=0;
+					int y=0; unsigned int ySet=0;
 					getWayLruByAddress(ways[x][setnum].address, &y, &ySet);
 					below->ways[y][ySet].dirty = 1;
 					below->updateLru(ySet, y);
@@ -262,7 +265,7 @@ public:
 				if (above != NULL) {
 					int wayAbove = above->search(ways[x][setnum].address);
 					if (wayAbove != -1) {
-						unsigned offsetAbove=0, setnumAbove=0, tagAbove=0;
+						unsigned int offsetAbove=0, setnumAbove=0, tagAbove=0;
 						above->getFromAddress(ways[x][setnum].address, &offsetAbove, &setnumAbove, &tagAbove);
 						above->ways[wayAbove][setnumAbove].valid = 0;
 					}
@@ -297,7 +300,7 @@ int main(int argc, char **argv) {
 		return 0;
 	}
 
-	unsigned MemCyc = 0, BSize = 0, L1Size = 0, L2Size = 0, L1Assoc = 0,
+	unsigned int MemCyc = 0, BSize = 0, L1Size = 0, L2Size = 0, L1Assoc = 0,
 			L2Assoc = 0, L1Cyc = 0, L2Cyc = 0, WrAlloc = 0;
 
 	for (int i = 2; i < 19; i += 2) {

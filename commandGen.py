@@ -2,8 +2,8 @@ import argparse
 import subprocess
 import os
 
-# testsFolder = "tests2"
-testsFolder = "tests"
+testsFolder = "tests2"
+# testsFolder = "tests"
 
 def copy2clip(string):
 	cmd = 'echo | set /p=' + string.strip() + '|clip'
